@@ -1,0 +1,14 @@
+{
+  "name": "airink",
+  "version": "1.0.0",
+  "description": "Draw in mid-air with your fingertips — real-time hand tracking, gesture control and smart-shape recognition in the browser.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node serve.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

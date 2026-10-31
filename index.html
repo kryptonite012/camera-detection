@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AirInk — Draw in the Air</title>
+  <meta name="description" content="Draw in mid-air with your fingertips. Real-time AI hand tracking, gesture control and smart-shape recognition, running entirely in your browser.">
+  <meta name="theme-color" content="#03060d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2303060d'/%3E%3Cpath d='M7 22c4-9 7-13 10-13s3 9 8 5' fill='none' stroke='%2300e5ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body data-camera="dim" data-state="boot">
+
+  <!-- ░░ Stage: camera + drawing layers ░░ -->
+  <main id="stage" aria-label="Drawing canvas">
+    <video id="camera" playsinline muted></video>
+    <div class="fx fx-tint"></div>
+    <div class="fx fx-grid"></div>
+    <canvas id="board"></canvas>
+    <canvas id="live"></canvas>
+    <div class="fx fx-scanlines"></div>
+    <div class="fx fx-vignette"></div>
+  </main>
+
+  <!-- ░░ HUD ░░ -->
+  <div class="hud">
+
+    <nav class="toolbar panel ui-zone" id="toolbar" aria-label="Tools">
+      <div class="tb-group" role="group" aria-label="Colour">
+        <button class="swatch" data-action="color" data-value="#00f0ff" style="--c:#00f0ff" title="Cyan (1)"></button>
+        <button class="swatch" data-action="color" data-value="#ff2bd6" style="--c:#ff2bd6" title="Magenta (2)"></button>
+        <button class="swatch" data-action="color" data-value="#7dff3a" style="--c:#7dff3a" title="Lime (3)"></button>
+        <button class="swatch" data-action="color" data-value="#ffb020" style="--c:#ffb020" title="Amber (4)"></button>
+        <button class="swatch" data-action="color" data-value="#9b6bff" style="--c:#9b6bff" title="Violet (5)"></button>
+        <button class="swatch" data-action="color" data-value="#f4f8ff" style="--c:#f4f8ff" title="White (6)"></button>
+      </div>
+      <i class="tb-sep"></i>
+      <div class="tb-group" role="group" aria-label="Brush">
+        <button class="tool" data-action="brush" data-value="neon" title="Neon brush (B)">
+          <svg viewBox="0 0 24 24"><path d="M3 17c3-7 5.5-10 8-10s2.5 9 10 4"/></svg><span>NEON</span>
+        </button>
+        <button class="tool" data-action="brush" data-value="ink" title="Ink brush — speed-sensitive (B)">
+          <svg viewBox="0 0 24 24"><path d="M14 4l6 6-9.5 9.5H4.5v-6z"/><path d="M12 6l6 6"/></svg><span>INK</span>
+        </button>
+        <button class="tool" data-action="brush" data-value="rainbow" title="Spectrum brush (B)">
+          <svg viewBox="0 0 24 24"><path d="M2.5 18a9.5 9.5 0 0 1 19 0"/><path d="M6.5 18a5.5 5.5 0 0 1 11 0"/><path d="M10.5 18a1.5 1.5 0 0 1 3 0"/></svg><span>SPECTRUM</span>
+        </button>
+        <button class="tool" data-action="brush" data-value="spark" title="Particle brush (B)">
+          <svg viewBox="0 0 24 24"><path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg><span>PARTICLE</span>
+        </button>
+      </div>
+      <i class="tb-sep"></i>
+      <div class="tb-group size-group" role="group" aria-label="Brush size">
+        <button class="tool small" data-action="size-down" data-repeat title="Smaller ([)"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+        <output id="sizeValue" class="size-value"><i></i><b>8</b></output>
+        <button class="tool small" data-action="size-up" data-repeat title="Bigger (])"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+      </div>
+      <i class="tb-sep"></i>
+      <div class="tb-group" role="group" aria-label="Smart shapes">
+        <button class="tool toggle" data-action="shapes" title="Smart shapes — snap circles, lines, rectangles, triangles (G)">
+          <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><path d="M13 21l4-7 4 7z"/><rect x="3" y="15" width="6" height="6"/></svg><span>SHAPES</span>
+        </button>
+      </div>
+      <i class="tb-sep"></i>
+      <div class="tb-group" role="group" aria-label="History">
+        <button class="tool" data-action="undo" data-repeat title="Undo (Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span>UNDO</span></button>
+        <button class="tool" data-action="redo" data-repeat title="Redo (Y)"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg><span>REDO</span></button>
+        <button class="tool danger" data-action="clear" title="Clear canvas (C)"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>CLEAR</span></button>
+        <button class="tool" data-action="save" title="Save PNG (S)"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg><span>SAVE</span></button>
+      </div>
+      <i class="tb-sep"></i>
+      <button class="tool" data-action="settings" title="Settings" aria-expanded="false" aria-controls="settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg><span>SETUP</span>
+      </button>
+    </nav>
+
+    <aside class="settings panel ui-zone" id="settings" hidden aria-label="Settings">
+      <header><h2>SYSTEM SETUP</h2><button class="tool small" data-action="settings" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+      <div class="setting">
+        <label>DRAW TRIGGER</label>
+        <div class="seg" data-key="drawTrigger">
+          <button data-action="set" data-key="drawTrigger" data-value="index">☝️ Index finger</button>
+          <button data-action="set" data-key="drawTrigger" data-value="pinch">🤏 Pinch</button>
+        </div>
+      </div>
+      <div class="setting">
+        <label>STROKE SMOOTHING</label>
+        <div class="seg" data-key="smoothing">
+          <button data-action="set" data-key="smoothing" data-value="0.2">Raw</button>
+          <button data-action="set" data-key="smoothing" data-value="0.55">Balanced</button>
+          <button data-action="set" data-key="smoothing" data-value="0.85">Silky</button>
+        </div>
+      </div>
+      <div class="setting">
+        <label>CAMERA FEED</label>
+        <div class="seg" data-key="camera">
+          <button data-action="set" data-key="camera" data-value="on">Clear</button>
+          <button data-action="set" data-key="camera" data-value="dim">Hologram</button>
+          <button data-action="set" data-key="camera" data-value="off">Void</button>
+        </div>
+      </div>
+      <div class="setting">
+        <label>HAND SKELETON</label>
+        <div class="seg" data-key="skeleton">
+          <button data-action="set" data-key="skeleton" data-value="true">Show</button>
+          <button data-action="set" data-key="skeleton" data-value="false">Hide</button>
+        </div>
+      </div>
+      <div class="setting">
+        <label>MIRROR VIEW</label>
+        <div class="seg" data-key="mirror">
+          <button data-action="set" data-key="mirror" data-value="true">On</button>
+          <button data-action="set" data-key="mirror" data-value="false">Off</button>
+        </div>
+      </div>
+      <p class="kbd-help">
+        <kbd>Z</kbd> undo <kbd>Y</kbd> redo <kbd>C</kbd> clear <kbd>S</kbd> save <kbd>G</kbd> shapes
+        <kbd>B</kbd> brush <kbd>1–6</kbd> colour <kbd>[ ]</kbd> size <kbd>H</kbd> camera <kbd>K</kbd> skeleton
+      </p>
+    </aside>
+
+    <section class="corner bottom-left">
+      <div class="brand panel">
+        <div class="logo">AIR<span>INK</span></div>
+        <div class="status"><i class="dot" id="statusDot"></i><span id="statusText">STANDBY</span></div>
+      </div>
+      <div class="legend panel" id="legend">
+        <h3>GESTURES</h3>
+        <ul>
+          <li data-intent="draw"><span class="g" id="drawGlyph">☝️</span><b id="drawLabel">Index finger</b><em>Draw</em></li>
+          <li data-intent="hover"><span class="g">✌️</span><b>Two fingers</b><em>Move · select</em></li>
+          <li data-intent="erase"><span class="g">✋</span><b>Open palm</b><em>Erase</em></li>
+          <li data-intent="clear"><span class="g">✊</span><b>Hold fist</b><em>Clear all</em></li>
+        </ul>
+        <p class="legend-tip">Hover a button for a moment to press it in the air.</p>
+      </div>
+    </section>
+
+    <section class="corner bottom-right">
+      <div class="telemetry panel">
+        <div class="metric"><label>FPS</label><b id="tFps">--</b></div>
+        <div class="metric"><label>INFER</label><b id="tInfer">--</b><small>ms</small></div>
+        <div class="metric"><label>HANDS</label><b id="tHands">0</b></div>
+        <div class="metric"><label>ENGINE</label><b id="tEngine">--</b></div>
+      </div>
+      <div class="readout panel">
+        <i class="readout-dot" id="rColor"></i>
+        <span id="rBrush">NEON</span><span class="sep">/</span><span id="rSize">8PX</span><span class="sep">/</span><span id="rShapes">SHAPES ON</span>
+        <span class="sep">/</span><span id="rStrokes">0 STROKES</span>
+      </div>
+    </section>
+
+    <div class="hint" id="hint" hidden>
+      <div class="hint-glyph">☝️</div>
+      <p>Raise your hand and point your <b>index finger</b> to draw</p>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <!-- ░░ Boot sequence ░░ -->
+  <div class="boot" id="boot">
+    <div class="boot-core">
+      <div class="reactor" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+      <h1 class="boot-title">AIR<span>INK</span></h1>
+      <p class="tagline">Draw in mid-air with your fingertips.</p>
+      <ol class="boot-log" id="bootLog" aria-live="polite"></ol>
+      <div class="boot-actions">
+        <button class="primary" id="startBtn">INITIALIZE</button>
+        <button class="ghost" id="mouseBtn">Continue without camera</button>
+      </div>
+      <p class="privacy">Runs 100% on your device. Your camera feed never leaves the browser.</p>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
